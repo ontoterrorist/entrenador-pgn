@@ -1,0 +1,4 @@
+# Datos personales y cursos (PGN de Chessable): se quedan en local
+data/
+__pycache__/
+*.log
