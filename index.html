@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entrenador PGN</title>
+    <link rel="icon" href="icono.ico" />
+    <link rel="stylesheet" href="vendor/chessground.base.css" />
+    <link rel="stylesheet" href="vendor/chessground.brown.css" />
+    <link rel="stylesheet" href="vendor/chessground.cburnett.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="barra-sup">
+      <a class="marca" href="#/"><span aria-hidden="true">♞</span> Entrenador PGN</a>
+      <nav class="nav">
+        <a href="#/" data-nav="/">Panel</a>
+        <a href="#/errores" data-nav="/errores">Errores</a>
+        <a href="#/catalogo" data-nav="/catalogo">Catálogo</a>
+        <a href="#/ajustes" data-nav="/ajustes">Ajustes</a>
+      </nav>
+      <span id="srv" class="srv" title="Estado del servidor local">conectando…</span>
+    </header>
+
+    <div id="aviso" class="aviso" hidden></div>
+
+    <main id="vista" class="vista">
+      <p class="cargando">Cargando cursos…</p>
+    </main>
+
+    <section id="entrenador" class="ent" hidden>
+      <div class="ent-tablero">
+        <div id="tablero"></div>
+      </div>
+      <aside class="ent-panel">
+        <div class="ent-cab">
+          <span id="ent-modo" class="chip"></span>
+          <span id="ent-prog" class="ent-prog"></span>
+          <button id="ent-salir" class="btn fantasma" type="button" title="Salir (Esc)">Salir</button>
+        </div>
+        <div class="progreso"><div id="ent-barra"></div></div>
+        <div id="ent-titulo" class="ent-titulo"></div>
+        <div id="ent-turno" class="ent-turno" role="status" hidden></div>
+        <div id="ent-msg" class="msg" role="status" aria-live="polite"></div>
+        <div id="ent-botones" class="ent-botones">
+          <button id="ent-pista" class="btn" type="button" title="Pista (H). En repaso cuenta como fallo.">Pista <kbd>H</kbd></button>
+          <button id="ent-desliz" class="btn" type="button" hidden title="No contar el último fallo (D)">Fue un desliz <kbd>D</kbd></button>
+          <button id="ent-prueba" class="btn" type="button" hidden>Ponerme a prueba</button>
+          <button id="ent-repetir" class="btn" type="button" hidden>Repetir línea</button>
+          <button id="ent-atras" class="btn" type="button" hidden title="Volver a la página de texto anterior (←)">← Atrás <kbd>←</kbd></button>
+          <button id="ent-siguiente" class="btn primario" type="button" hidden>Siguiente <kbd>Enter</kbd></button>
+        </div>
+        <div class="ent-opciones">
+          <label class="opcion" title="Apagado: sin flecha ni texto con la jugada correcta, ni al aprender ni tras un fallo. La pista (H) sigue disponible."><input id="ent-opt-jugada" type="checkbox" /> Mostrar mejor jugada</label>
+          <label class="opcion" title="Comentarios del PGN después de cada jugada, también en repaso."><input id="ent-opt-texto" type="checkbox" /> Texto del PGN</label>
+          <button id="ent-ver-pgn" class="btn chico fantasma" type="button" title="Muestra también las jugadas de la línea que aún no has hecho, con sus comentarios">Ver PGN completo</button>
+        </div>
+        <label class="ent-tam" title="Tamaño del tablero: el texto aprovecha el espacio que quede">Tablero <input id="ent-tam" type="range" min="40" max="100" step="5" value="100" aria-label="Tamaño del tablero" /></label>
+        <div class="ent-timer">
+          <label class="opcion" title="Cuenta atrás en cada jugada tuya"><input id="ent-timer-on" type="checkbox" /> Timer</label>
+          <label class="opcion" title="Segundos por jugada: usa las flechas o escribe el número"><input id="ent-timer-seg" type="number" min="1" max="3600" step="1" value="30" inputmode="numeric" aria-label="Segundos por jugada" /> s por jugada</label>
+          <label class="opcion" title="Si se agota el tiempo sin jugar, la posición cuenta como fallo (en repaso, práctica y errores). «Fue un desliz» lo anula."><input id="ent-timer-fallo" type="checkbox" /> Fallo al agotarse</label>
+          <div id="ent-reloj" class="ent-reloj" role="timer" hidden>
+            <span id="ent-reloj-txt" class="ent-reloj-txt">0:30</span>
+            <div class="ent-reloj-barra"><div id="ent-reloj-prog"></div></div>
+          </div>
+        </div>
+        <div id="ent-jugadas" class="jugadas"></div>
+        <div id="ent-fin" class="ent-fin" hidden></div>
+      </aside>
+      <aside class="ent-textcol" aria-label="Texto del PGN">
+        <div id="ent-comentario" class="comentario" hidden></div>
+        <div id="ent-pgn" class="pgn-vivo" hidden></div>
+        <div id="ent-texto" class="texto en-panel" hidden></div>
+      </aside>
+    </section>
+
+    <div id="modal" class="modal" hidden>
+      <div class="modal-caja" role="dialog" aria-modal="true"></div>
+    </div>
+    <div id="soltar" class="soltar" hidden><div>Suelta tus archivos .pgn para crear un curso</div></div>
+    <div id="toast" class="toast" hidden></div>
+    <input id="archivo" type="file" accept=".pgn,.txt" multiple hidden />
+    <input id="archivo-progreso" type="file" accept=".json" hidden />
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
