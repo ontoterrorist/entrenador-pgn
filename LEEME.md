@@ -10,6 +10,16 @@ Doble clic en el acceso **Entrenador PGN** del escritorio, o en **`Entrenador PG
 - Si ya estaba abierto, el `.bat` abre otra pestaña y no arranca un segundo servidor.
 - Para dejarlo siempre encendido: `py server.py --siempre`.
 
+## Versión web (sin servidor)
+
+La carpeta `static/` también funciona sola, como sitio estático (GitHub Pages o cualquier servidor de archivos), y bajo un subpath como `/entrenador-pgn/`: todas las rutas son relativas.
+
+- Al arrancar, la app pregunta por `api/ping`. Si contesta `server.py`, todo va como siempre. Si no, entra en **modo navegador** (arriba a la derecha dice «en este navegador»): los cursos y el progreso se guardan en IndexedDB, en el propio navegador. `static/almacen.js` contesta las mismas rutas que el servidor, con el mismo control de conflictos entre pestañas.
+- Cada navegador (y cada sitio) guarda sus datos aparte. Para llevarte tus cursos de la versión local a la web, o de un navegador a otro: *Ajustes → Tus datos → Exportar copia completa* (un JSON con los PGN y el progreso) y, en el otro lado, **Importar**. Los cursos conservan su id, así que el progreso encaja; los que ya estaban se dejan como están y el progreso se reemplaza por el del archivo. Al revés (de la web a la local) funciona igual.
+- En modo navegador no hay pestaña **Catálogo**: el repo de ChessNomad no tiene licencia, así que su CSV no se publica. Tampoco hay copias automáticas ni papelera: exporta una copia de vez en cuando. Si borras los datos del sitio en el navegador, se pierden.
+- Publicado en https://ontoterrorist.github.io/entrenador-pgn/ desde la rama `gh-pages`, que es una copia de `static/`. Tras cambiar algo en `static/` y hacer commit en `main`, se actualiza con `git subtree push --prefix static origin gh-pages`.
+- Los cursos que subas en la web no salen de tu navegador: no se suben a ningún servidor ni al repo.
+
 ## Uso
 
 - **Subir PGN**: con el botón, arrastrando archivos a la ventana o pegando el texto. Sirve cualquier PGN con variantes (estudio de Lichess, base de ChessBase, tu repertorio). Los archivos en Latin-1 de ChessBase se leen bien. El bando se detecta solo: primero por la cabecera `Orientation`, luego por dónde ramifica el árbol y, si no, por el nombre. Puedes cambiarlo.
@@ -34,7 +44,7 @@ Doble clic en el acceso **Entrenador PGN** del escritorio, o en **`Entrenador PG
 - **Eliminar progreso** (vista del curso y tarjetas de *Tus cursos*, junto a *Aprender*): deja el curso como nuevo —líneas aprendidas, niveles, fallos y textos leídos, con cualquier bando con el que lo hubieras entrenado— y conserva el curso y su PGN. Pide confirmación y dice qué se olvida. Las estadísticas por día (racha, repasos de hoy) no son de un curso y se conservan.
 - **Quién juega**: bajo el título del panel, en grande, «Juegan blancas» o «Juegan negras» (con «· tú» o «· rival» en las líneas y errores), se actualiza en cada jugada. También sale en las páginas de texto que traen una posición.
 - **Atajos**: `H` pista (cuenta como fallo), `Enter` siguiente, `Esc` salir, `←`/`→` entre páginas de texto.
-- **Catálogo**: los 376 cursos de Chessable del repo [ChessNomad/chessable-courses](https://github.com/ChessNomad/chessable-courses) (metadatos de julio de 2020, sin jugadas). Si tienes el PGN de uno de esos cursos, súbelo desde su fila y queda vinculado.
+- **Catálogo** (solo en la versión local): los 376 cursos de Chessable del repo [ChessNomad/chessable-courses](https://github.com/ChessNomad/chessable-courses) (metadatos de julio de 2020, sin jugadas). Si tienes el PGN de uno de esos cursos, súbelo desde su fila y queda vinculado.
 
 ## Datos
 
@@ -51,6 +61,7 @@ Si el servidor se cae con la pestaña abierta, lo no guardado queda en el navega
 ## Archivos
 
 - `server.py`: servidor (solo biblioteca estándar de Python). Se encarga de la persistencia y del ciclo de vida atado a la pestaña.
+- `static/almacen.js`: la persistencia del modo navegador (IndexedDB), con las mismas rutas y respuestas que `server.py`.
 - `static/pgn.js`: lee el PGN y construye el árbol de variantes, las líneas y las tarjetas; también separa los capítulos de solo texto (`curso.lecturas`) y limpia los comentarios (`bloquesTexto`).
 - `static/srs.js`: calendario de repetición espaciada.
 - `static/sonidos.js`: efectos de 8 bits al estilo Game Boy, sintetizados con ondas de pulso. Solo suenan al fallar y al terminar una línea; las jugadas van en silencio. Se escuchan en *Ajustes → Sonido → ▶ Escuchar*.

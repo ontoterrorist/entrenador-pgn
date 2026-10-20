@@ -351,8 +351,9 @@ class Manejador(BaseHTTPRequestHandler):
         color = cuerpo.get("color")
         if not isinstance(pgn, str) or not pgn.strip() or not nombre or color not in ("w", "b", "auto"):
             return self._error(400, "faltan nombre, color o pgn")
+        cid = cuerpo.get("id")  # al importar una copia el curso conserva su id: el progreso lo usa
         meta = {
-            "id": uuid.uuid4().hex[:12],
+            "id": cid if isinstance(cid, str) and re.fullmatch(r"[0-9a-f]{12}", cid) else uuid.uuid4().hex[:12],
             "nombre": nombre,
             "color": color,
             "creado": datetime.now().isoformat(timespec="seconds"),
@@ -360,9 +361,11 @@ class Manejador(BaseHTTPRequestHandler):
             "archivos": [str(a)[:200] for a in cuerpo.get("archivos") or []][:50],
         }
         with bloqueo:
+            lista = cursos()
+            if any(c["id"] == meta["id"] for c in lista):
+                return self._error(409, "ya existe un curso con ese id")
             CURSOS_DIR.mkdir(parents=True, exist_ok=True)
             escribir_atomico(CURSOS_DIR / f"{meta['id']}.pgn", pgn)
-            lista = cursos()
             lista.append(meta)
             escribir_json(CURSOS_JSON, lista)
         log(f"curso nuevo: {nombre} ({meta['id']})")

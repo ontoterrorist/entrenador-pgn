@@ -5,6 +5,7 @@ import * as S from "./srs.js";
 import { Tablero } from "./tablero.js";
 import { sonar } from "./sonidos.js";
 import { Chessground } from "./vendor/chessground.min.js";
+import { hayServidor, apiNavegador } from "./almacen.js";
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -43,17 +44,20 @@ const app = {
 };
 let tablero = null;
 let catalogoPendiente = null; // curso del catalogo al que se vinculara el PGN que se suba
+let modoNavegador = false; // sin server.py (GitHub Pages): cursos y progreso en IndexedDB, ver almacen.js
 
 // ================================================================== servidor
 
+// Rutas relativas ("estado", "cursos/<id>"...): asi la app tambien funciona bajo un subpath.
 async function api(ruta, { metodo = "GET", cuerpo } = {}) {
+  if (modoNavegador) return apiNavegador(ruta, metodo, cuerpo);
   const op = { method: metodo, headers: {} };
   if (metodo !== "GET") op.headers["X-Entrenador"] = "1";
   if (cuerpo !== undefined) {
     op.headers["Content-Type"] = "application/json";
     op.body = JSON.stringify(cuerpo);
   }
-  const r = await fetch(ruta, op);
+  const r = await fetch(`api/${ruta}`, op);
   const datos = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(datos.error || `HTTP ${r.status}`), { status: r.status, datos });
   return datos;
@@ -92,7 +96,7 @@ async function volcar() {
   guardando = true;
   sucio = false;
   try {
-    const r = await api("/api/progreso", { metodo: "POST", cuerpo: { baseRev: app.rev, data: app.P } });
+    const r = await api("progreso", { metodo: "POST", cuerpo: { baseRev: app.rev, data: app.P } });
     app.rev = r.rev;
     try {
       if (!sucio) localStorage.removeItem(PENDIENTE_LS);
@@ -119,7 +123,7 @@ window.addEventListener("pagehide", () => {
 function conectarVida() {
   const srv = $("#srv");
   let tCaida = 0;
-  const es = new EventSource("/api/vida");
+  const es = new EventSource("api/vida");
   es.addEventListener("hola", () => {
     clearTimeout(tCaida);
     srv.textContent = "servidor activo";
@@ -139,7 +143,7 @@ function conectarVida() {
 }
 
 async function cargar() {
-  const est = await api("/api/estado");
+  const est = await api("estado");
   app.metas = est.cursos;
   app.rev = est.progreso.rev;
   app.P = S.normalizar(est.progreso.data);
@@ -151,10 +155,16 @@ async function cargar() {
       toast("Recuperé progreso que no se había llegado a guardar.");
     } else if (pend) localStorage.removeItem(PENDIENTE_LS);
   } catch {}
-  const textos = await Promise.all(app.metas.map((m) => fetch(`/api/cursos/${m.id}.pgn`).then((r) => (r.ok ? r.text() : ""))));
+  const textos = await Promise.all(app.metas.map((m) => textoCurso(m.id)));
   app.metas.forEach((m, i) => (app.textos[m.id] = textos[i]));
   app.cursos = app.metas.map((m) => construirCurso(m, app.textos[m.id]));
   indexar();
+}
+
+async function textoCurso(id) {
+  if (modoNavegador) return apiNavegador(`cursos/${id}.pgn`);
+  const r = await fetch(`api/cursos/${id}.pgn`);
+  return r.ok ? r.text() : "";
 }
 
 function indexar() {
@@ -224,7 +234,7 @@ function render() {
   if (r === "/") vistaPanel();
   else if (r.startsWith("/curso/")) vistaCurso(r.slice(7));
   else if (r === "/errores") vistaErrores();
-  else if (r === "/catalogo") vistaCatalogo();
+  else if (r === "/catalogo" && !modoNavegador) vistaCatalogo();
   else if (r === "/ajustes") vistaAjustes();
   else location.hash = "#/";
 }
@@ -298,7 +308,7 @@ function vistaPanel() {
           <button class="btn primario" data-acc="subir">Subir PGN</button>
           <button class="btn" data-acc="pegar">Pegar PGN</button>
           <button class="btn" data-acc="ejemplo">Probar con un ejemplo</button>
-          <a class="btn fantasma" href="#/catalogo">Ver catálogo de Chessable</a>
+          ${modoNavegador ? `<button class="btn fantasma" data-acc="importar-progreso" title="Una copia exportada desde Ajustes, por ejemplo de la versión local">Importar una copia</button>` : `<a class="btn fantasma" href="#/catalogo">Ver catálogo de Chessable</a>`}
         </div>
       </div>`;
     return;
@@ -554,7 +564,7 @@ function vistaCurso(id) {
     const nombre = e.target.value.trim();
     if (!nombre) return (e.target.value = c.nombre);
     try {
-      const meta = await api(`/api/cursos/${c.id}`, { metodo: "POST", cuerpo: { nombre } });
+      const meta = await api(`cursos/${c.id}`, { metodo: "POST", cuerpo: { nombre } });
       Object.assign(c.meta, meta);
       c.nombre = meta.nombre;
       toast("Nombre guardado");
@@ -569,7 +579,7 @@ function vistaCurso(id) {
       return;
     }
     try {
-      const meta = await api(`/api/cursos/${c.id}`, { metodo: "POST", cuerpo: { color } });
+      const meta = await api(`cursos/${c.id}`, { metodo: "POST", cuerpo: { color } });
       const nuevo = construirCurso(meta, app.textos[c.id]);
       app.cursos[app.cursos.indexOf(c)] = nuevo;
       app.metas = app.metas.map((m) => (m.id === meta.id ? meta : m));
@@ -605,9 +615,9 @@ async function reiniciarProgreso(id) {
 
 async function borrarCurso(id) {
   const c = curso(id);
-  if (!c || !confirm(`¿Eliminar «${c.nombre}» y su progreso? El PGN se mueve a data/papelera.`)) return;
+  if (!c || !confirm(`¿Eliminar «${c.nombre}» y su progreso? ${modoNavegador ? "El PGN se borra de este navegador." : "El PGN se mueve a data/papelera."}`)) return;
   try {
-    await api(`/api/cursos/${id}`, { metodo: "DELETE" });
+    await api(`cursos/${id}`, { metodo: "DELETE" });
   } catch (err) {
     return toast(`No se pudo eliminar: ${err.message}`);
   }
@@ -848,7 +858,7 @@ function abrirImportar({ archivos = [], pegar = false, texto = "", catalogo = nu
     for (const b of st.borradores) {
       if (!b.previa?.lineas.length || !b.nombre.trim()) continue;
       try {
-        const meta = await api("/api/cursos", {
+        const meta = await api("cursos", {
           metodo: "POST",
           cuerpo: { nombre: b.nombre.trim(), color: b.color, pgn: b.texto, archivos: b.archivos, catalogo: catalogo ? { link: catalogo.link, titulo: catalogo.titulo } : null },
         });
@@ -1701,7 +1711,7 @@ async function vistaCatalogo() {
   if (!app.catalogo) {
     vista.innerHTML = `<p class="cargando">Cargando catálogo…</p>`;
     try {
-      app.catalogo = await api("/api/catalogo");
+      app.catalogo = await api("catalogo");
     } catch (e) {
       vista.innerHTML = `<p class="mal">No se pudo cargar el catálogo: ${esc(e.message)}</p>`;
       return;
@@ -1834,10 +1844,15 @@ function vistaAjustes() {
 
     <section class="seccion">
       <h2>Tus datos</h2>
-      <p class="sub">Todo se guarda en <code>ajedrez/entrenador-pgn/data/</code>: <code>progreso.json</code> (repasos y fallos) y <code>cursos/</code> (tus PGN). Cada arranque deja una copia del progreso en <code>data/copias/</code>.</p>
+      ${
+        modoNavegador
+          ? `<p class="sub">Todo se guarda <b>solo en este navegador</b>: si borras los datos del sitio o cambias de navegador o de equipo, no estarán allí. Exporta una copia completa de vez en cuando; con «Importar» la cargas aquí, en otro navegador o en la versión local (<code>server.py</code>).</p>`
+          : `<p class="sub">Todo se guarda en <code>ajedrez/entrenador-pgn/data/</code>: <code>progreso.json</code> (repasos y fallos) y <code>cursos/</code> (tus PGN). Cada arranque deja una copia del progreso en <code>data/copias/</code>. La copia completa sirve para llevarte cursos y progreso a la versión web.</p>`
+      }
       <div class="seccion-cab">
-        <button class="btn" data-acc="exportar">Exportar progreso</button>
-        <button class="btn" data-acc="importar-progreso">Importar progreso</button>
+        <button class="btn" data-acc="exportar-todo" title="Cursos (con sus PGN) y progreso en un solo archivo">Exportar copia completa</button>
+        <button class="btn" data-acc="exportar" title="Solo repasos, fallos y ajustes: un archivo pequeño">Exportar solo progreso</button>
+        <button class="btn" data-acc="importar-progreso" title="Acepta los dos tipos de archivo">Importar</button>
       </div>
     </section>`;
   for (const el of $$("[data-aj]")) {
@@ -1853,12 +1868,35 @@ function vistaAjustes() {
   }
 }
 
-function exportar() {
+// La copia completa lleva ademas el texto de cada PGN: con ella se pasa todo de la version
+// local a la web (o a otro navegador), donde cada uno guarda sus datos aparte.
+function exportar(completa = false) {
   const datos = { app: "entrenador-pgn", exportado: new Date().toISOString(), cursos: app.metas, progreso: app.P };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(datos, null, 1)], { type: "application/json" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: `entrenador-pgn-progreso-${S.hoyClave()}.json` });
+  if (completa) datos.pgn = app.textos;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(datos, null, completa ? 0 : 1)], { type: "application/json" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `entrenador-pgn-${completa ? "copia" : "progreso"}-${S.hoyClave()}.json` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Los cursos conservan su id (las claves del progreso lo llevan delante); los que ya estan
+// aqui se dejan como estan. El progreso se reemplaza entero por el del archivo.
+async function importarCursos(datos) {
+  const ids = new Set(app.metas.map((m) => m.id));
+  const nuevos = (datos.cursos || []).filter((m) => typeof datos.pgn[m.id] === "string" && !ids.has(m.id));
+  const repetidos = (datos.cursos || []).length - nuevos.length;
+  const aviso = modoNavegador ? "" : "\n\n(Queda una copia del progreso actual en data/copias al reiniciar.)";
+  if (!confirm(`¿Importar la copia?\n\nSe añaden ${plural(nuevos.length, "curso", "cursos")}${repetidos ? ` (${repetidos} ya estaban y se dejan como están)` : ""} y tu progreso se reemplaza por el del archivo.${aviso}`)) return false;
+  toast("Importando…", 60000);
+  for (const m of nuevos) {
+    const texto = datos.pgn[m.id];
+    const meta = await api("cursos", { metodo: "POST", cuerpo: { id: m.id, nombre: m.nombre, color: m.color, pgn: texto, archivos: m.archivos, catalogo: m.catalogo } });
+    app.metas.push(meta);
+    app.textos[meta.id] = texto;
+    app.cursos.push(construirCurso(meta, texto));
+  }
+  indexar();
+  return true;
 }
 
 $("#archivo-progreso").addEventListener("change", async (e) => {
@@ -1869,7 +1907,9 @@ $("#archivo-progreso").addEventListener("change", async (e) => {
     const datos = JSON.parse(await f.text());
     const prog = datos.progreso || datos;
     if (!prog.tarjetas) throw new Error("no parece un progreso del entrenador");
-    if (!confirm("¿Reemplazar tu progreso actual por el del archivo? (Queda una copia del actual en data/copias al reiniciar.)")) return;
+    if (datos.pgn) {
+      if (!(await importarCursos(datos))) return;
+    } else if (!confirm(`¿Reemplazar tu progreso actual por el del archivo?${modoNavegador ? "" : " (Queda una copia del actual en data/copias al reiniciar.)"}`)) return;
     app.P = S.normalizar(prog);
     guardar();
     toast("Progreso importado");
@@ -1905,7 +1945,8 @@ const acciones = {
     catalogoPendiente = app.catalogo[+i];
     $("#archivo").click();
   },
-  exportar,
+  exportar: () => exportar(),
+  "exportar-todo": () => exportar(true),
   "importar-progreso": () => $("#archivo-progreso").click(),
   "probar-sonidos": () => {
     // Suena aunque el sonido este apagado, para poder oirlo antes de activarlo.
@@ -1967,11 +2008,16 @@ setInterval(() => {
 }, 60e3);
 
 (async function arrancar() {
-  conectarVida();
+  modoNavegador = !(await hayServidor());
+  if (modoNavegador) {
+    // Sitio estatico: sin servidor que vigilar ni catalogo (sus datos no tienen licencia para publicarse).
+    Object.assign($("#srv"), { textContent: "en este navegador", className: "srv ok", title: "Sin servidor: cursos y progreso se guardan en este navegador. Exporta una copia desde Ajustes." });
+    $('.nav a[data-nav="/catalogo"]').hidden = true;
+  } else conectarVida();
   try {
     await cargar();
   } catch (e) {
-    $("#vista").innerHTML = `<p class="mal">No pude cargar los datos del servidor: ${esc(e.message)}</p>`;
+    $("#vista").innerHTML = `<p class="mal">No pude cargar los datos${modoNavegador ? " de este navegador" : " del servidor"}: ${esc(e.message)}</p>`;
     return;
   }
   if (ruta() === "/entrenar") location.hash = "#/";
